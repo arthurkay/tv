@@ -14,6 +14,27 @@ Everything below is verified against the APK this repo actually builds.
 `adb` lives at `$ANDROID_HOME/platform-tools/adb` — on this machine
 `/home/arthur/.android-sdk/platform-tools/adb`. Add it to `PATH` or call it by full path.
 
+## 0. The short way: download it on the TV
+
+Every push to `main` builds the APKs in CI and attaches them to a release, so
+there is usually nothing to build:
+
+1. On the TV, allow installs from whichever app you will download with —
+   **Settings → Apps → Security & restrictions → Unknown sources**.
+2. Open a browser or downloader app on the TV and go to **arthurkay.github.io/tv**.
+3. Choose **Download the APK**, open the file, confirm.
+
+Direct link, if your downloader wants a URL rather than a page:
+
+```
+https://github.com/arthurkay/tv/releases/latest/download/vieo-tv-arm64-v8a.apk
+```
+
+Older or budget hardware needs `vieo-tv-armeabi-v7a.apk` from the same release.
+
+The rest of this document is the developer path: building locally and installing
+over adb, which is what you want while changing the app.
+
 ## 1. Build the APK
 
 ```bash
