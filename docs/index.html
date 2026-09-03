@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vieo TV — download</title>
+<style>
+  :root {
+    --bg: #111111;
+    --surface: #1a1a1a;
+    --surface-hi: #252525;
+    --border: #2a2a2a;
+    --text: #f5f5f5;
+    --muted: #777777;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    /* Sized for a 10-foot viewing distance; scales down on a phone. */
+    font-size: clamp(16px, 1.35vw, 22px);
+    line-height: 1.5;
+  }
+  a { color: var(--text); }
+  a:hover { color: var(--muted); }
+  .wrap {
+    max-width: 60rem;
+    /* 5% overscan margin, the same safe area the app uses. */
+    margin: 0 auto;
+    padding: 5vh 5vw;
+  }
+  header { display: flex; align-items: center; gap: 1rem; }
+  header svg { height: 2.6em; width: auto; flex: none; }
+  h1 {
+    font-size: 2.4em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .sub { color: var(--muted); margin: 0.6rem 0 0; }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: clamp(1rem, 2.5vw, 2rem);
+    margin-top: 2.5rem;
+  }
+  .label {
+    font-size: 0.62em;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin: 0 0 0.9rem;
+  }
+  .url {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: clamp(1.1em, 3.2vw, 1.9em);
+    font-weight: 600;
+    word-break: break-all;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.8em 0.9em;
+    margin: 0;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    margin-top: 1.4rem;
+    padding: 0.75em 1.4em;
+    background: var(--text);
+    color: var(--bg);
+    font-size: 1.05em;
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 12px;
+    /* Comfortably over the 44px minimum on any screen. */
+    min-height: 56px;
+  }
+  .btn:hover, .btn:focus { background: var(--muted); color: var(--bg); }
+  .btn:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+  dl.facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1.2rem 2rem;
+    margin: 0;
+  }
+  dl.facts dt {
+    font-size: 0.62em;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+  dl.facts dd { margin: 0.35rem 0 0; font-weight: 600; }
+  ol { margin: 0; padding-left: 1.4em; }
+  ol li { margin-bottom: 1rem; }
+  ol li:last-child { margin-bottom: 0; }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    background: var(--surface-hi);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.1em 0.4em;
+    font-size: 0.88em;
+  }
+  .note { color: var(--muted); font-size: 0.85em; margin-top: 2.5rem; }
+  footer { color: var(--muted); font-size: 0.8em; margin-top: 3rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <svg viewBox="14 22.9 69.5 54.2" role="img" aria-label="Vieo TV">
+      <path fill="#f5f5f5" d="M14,24 L50,50 L14,76 Z"/>
+      <path d="M59.23,38.18 A15,15 0 0 1 59.23,61.82" fill="none" stroke="#f5f5f5"
+            stroke-width="7" stroke-linecap="round"/>
+      <path d="M68.47,26.36 A30,30 0 0 1 68.47,73.64" fill="none" stroke="#f5f5f5"
+            stroke-width="7" stroke-linecap="round"/>
+    </svg>
+    <h1>Vieo TV</h1>
+  </header>
+  <p class="sub">Live channels on Google TV and Android TV. Install straight from this page — no Play Store.</p>
+
+  <section class="panel">
+    <p class="label">TYPE THIS ON YOUR TV</p>
+    <p class="url" id="short-url">REPLACE-WITH-YOUR-PAGES-URL</p>
+    <a class="btn" id="download" href="REPLACE-WITH-YOUR-APK-URL" download>Download the APK</a>
+  </section>
+
+  <section class="panel">
+    <p class="label">THIS BUILD</p>
+    <dl class="facts">
+      <div><dt>VERSION</dt><dd>1.0.0</dd></div>
+      <div><dt>SIZE</dt><dd id="size">29 MB</dd></div>
+      <div><dt>ARCHITECTURE</dt><dd>arm64-v8a</dd></div>
+      <div><dt>REQUIRES</dt><dd>Android 7.0 or newer</dd></div>
+    </dl>
+    <p class="note" style="margin-top:1.6rem">
+      Most TVs and boxes from 2019 on are arm64. Older or budget sticks need the
+      armeabi-v7a build (26 MB) instead — check with
+      <code>adb shell getprop ro.product.cpu.abi</code>, or just try arm64 first.
+    </p>
+  </section>
+
+  <section class="panel">
+    <p class="label">INSTALLING IT</p>
+    <ol>
+      <li>
+        On the TV, open <strong>Settings &rarr; Apps &rarr; Security &amp; restrictions
+        &rarr; Unknown sources</strong> and allow whichever app you will download with
+        (a browser, a file manager, or a downloader app).
+      </li>
+      <li>
+        Open that app and enter the address above. Most Google TV devices ship without a
+        browser or file manager, so install one from the Play Store first.
+      </li>
+      <li>
+        Pick <strong>Download the APK</strong>, then open the downloaded file and confirm
+        the install. Vieo TV appears in your Apps row.
+      </li>
+    </ol>
+    <p class="note" style="margin-top:1.6rem">
+      On a computer instead? <code>adb connect &lt;tv-ip&gt;:5555</code> then
+      <code>adb install -r vieo-tv.apk</code>. The full runbook covers pairing, logs and
+      the errors worth knowing about.
+    </p>
+  </section>
+
+  <footer>
+    Signed with a debug key, so this is for your own devices — Android will refuse to
+    upgrade it over a build made on a different machine.
+  </footer>
+
+</div>
+<script>
+  // Show the page's own address, so whoever opens it on a TV can read out the
+  // URL to type on another device.
+  (function () {
+    try {
+      var el = document.getElementById('short-url');
+      var here = location.host + location.pathname.replace(/index\.html$/, '');
+      if (here && el.textContent.indexOf('REPLACE') === 0) el.textContent = here;
+    } catch (e) { /* leave the placeholder */ }
+  })();
+</script>
+</body>
+</html>
