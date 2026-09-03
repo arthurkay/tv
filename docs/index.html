@@ -127,8 +127,9 @@
 
   <section class="panel">
     <p class="label">TYPE THIS ON YOUR TV</p>
-    <p class="url" id="short-url">REPLACE-WITH-YOUR-PAGES-URL</p>
-    <a class="btn" id="download" href="REPLACE-WITH-YOUR-APK-URL" download>Download the APK</a>
+    <p class="url" id="short-url">arthurkay.github.io/tv</p>
+    <a class="btn" id="download"
+       href="https://github.com/arthurkay/tv/releases/latest/download/vieo-tv-arm64-v8a.apk">Download the APK</a>
   </section>
 
   <section class="panel">
@@ -141,7 +142,8 @@
     </dl>
     <p class="note" style="margin-top:1.6rem">
       Most TVs and boxes from 2019 on are arm64. Older or budget sticks need the
-      armeabi-v7a build (26 MB) instead — check with
+      <a href="https://github.com/arthurkay/tv/releases/latest">armeabi-v7a build</a>
+      (26 MB) instead — check with
       <code>adb shell getprop ro.product.cpu.abi</code>, or just try arm64 first.
     </p>
   </section>
@@ -171,8 +173,9 @@
   </section>
 
   <footer>
-    Signed with a debug key, so this is for your own devices — Android will refuse to
-    upgrade it over a build made on a different machine.
+    Built by GitHub Actions and signed with a generated debug key, so this is for
+    sideloading onto your own devices. Android will refuse to upgrade it over an APK
+    from a different build — uninstall first if it complains.
   </footer>
 
 </div>
@@ -183,7 +186,7 @@
     try {
       var el = document.getElementById('short-url');
       var here = location.host + location.pathname.replace(/index\.html$/, '');
-      if (here && el.textContent.indexOf('REPLACE') === 0) el.textContent = here;
+      if (location.host) el.textContent = here.replace(/\/$/, '');
     } catch (e) { /* leave the placeholder */ }
   })();
 </script>

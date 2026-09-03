@@ -1,0 +1,89 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    # Docs-only edits do not change the APK.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Needed to attach the APKs to a release.
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Android side targets Java 17 (android/app/build.gradle.kts).
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      # One APK per architecture: a universal build is over 200 MB because
+      # libmpv ships per ABI, and a TV only needs its own.
+      - name: Build release APKs
+        run: flutter build apk --release --split-per-abi
+
+      # Stable filenames, so the download page can link to a fixed URL.
+      - name: Collect APKs
+        run: |
+          mkdir -p dist
+          cd build/app/outputs/flutter-apk
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            if [ -f "app-$abi-release.apk" ]; then
+              cp "app-$abi-release.apk" "$GITHUB_WORKSPACE/dist/vieo-tv-$abi.apk"
+            fi
+          done
+          ls -lh "$GITHUB_WORKSPACE/dist"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vieo-tv-apks
+          path: dist/*.apk
+          if-no-files-found: error
+
+      # Only main publishes; a pull request just leaves the artifacts above.
+      - name: Publish to the rolling release
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          # Not a prerelease: /releases/latest/download/ only resolves to a
+          # full release, and the download page depends on that URL.
+          prerelease: false
+          make_latest: true
+          body: |
+            Automated build of ${{ github.sha }}.
+
+            Install `vieo-tv-arm64-v8a.apk` on any TV or box from roughly 2019
+            on. Older or budget sticks need `vieo-tv-armeabi-v7a.apk`. Check
+            with `adb shell getprop ro.product.cpu.abi` if unsure.
+
+            Signed with a generated debug key, so this is for sideloading onto
+            your own devices. Android will refuse to upgrade it over a build
+            from a different run — uninstall first if you hit
+            INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+          files: dist/*.apk
