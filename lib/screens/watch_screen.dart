@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/channel.dart';
+import '../services/player_tuning.dart';
 import '../services/thumbnail_service.dart';
 import '../widgets/channel_shelf.dart';
 import '../theme/app_theme.dart';
@@ -52,6 +52,12 @@ class _WatchScreenState extends State<WatchScreen> {
   bool _buffering = true;
   bool _playing = false;
 
+  /// What the viewer asked for, as opposed to what mpv is doing. A pause
+  /// pressed while the stream is still opening is otherwise overridden the
+  /// moment it finishes loading and auto-plays — which on a TV, where streams
+  /// take longer to start, is precisely when people press it.
+  bool _wantPlaying = true;
+
   /// Set once this player has produced video. Until then a failure is real;
   /// after it, an error event is either transient or belongs to another player.
   bool _hasVideo = false;
@@ -70,21 +76,12 @@ class _WatchScreenState extends State<WatchScreen> {
     ThumbnailService.suspend();
 
     _player = Player();
-    // On Android the default (vo=gpu, hwdec=auto-safe) becomes mediacodec-copy:
-    // every decoded frame is copied to CPU memory and re-uploaded, which
-    // stutters on TV-class chips. mediacodec_embed renders straight into the
-    // surface. The trade-off is that mpv can no longer screenshot this player,
-    // so the free frame grab below becomes best-effort (it already tolerates a
-    // null result).
-    _controller = VideoController(
-      _player,
-      configuration: defaultTargetPlatform == TargetPlatform.android
-          ? const VideoControllerConfiguration(
-              vo: 'mediacodec_embed',
-              hwdec: 'mediacodec',
-            )
-          : const VideoControllerConfiguration(),
-    );
+    _controller = VideoController(_player);
+    // Default video output on purpose. mediacodec_embed is lighter on TV chips
+    // but takes presentation timing away from mpv, and the result on a real TV
+    // was audio drifting from picture. Smoothness is handled by capping the
+    // HLS variant on TVs instead (see PlayerTuning).
+    PlayerTuning.apply(_player);
 
     _subscriptions.addAll([
       _player.stream.buffering.listen((buffering) {
@@ -92,6 +89,12 @@ class _WatchScreenState extends State<WatchScreen> {
       }),
       _player.stream.playing.listen((playing) {
         if (!mounted) return;
+        // open() calls play() once the stream has loaded, whatever was pressed
+        // in the meantime. Re-assert the viewer's choice the moment that lands.
+        if (playing && !_wantPlaying) {
+          _player.pause();
+          return;
+        }
         setState(() {
           _playing = playing;
           // A paused picture with no controls is a dead end on a TV.
@@ -114,6 +117,7 @@ class _WatchScreenState extends State<WatchScreen> {
             _error = null;
           });
         }
+        if (!_wantPlaying) _player.pause();
         _scheduleThumbnailCapture();
       }),
       _player.stream.error.listen((error) {
@@ -127,6 +131,33 @@ class _WatchScreenState extends State<WatchScreen> {
     _player.open(Media(widget.channel.url));
     _startHideTimer();
     _startStartupWatchdog();
+
+    // autofocus is not enough when a grid card on the route below still holds
+    // primary focus: the remote's keys would keep going to that card. Take
+    // focus explicitly once this route has laid out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _keyFocusNode.requestFocus();
+    });
+
+    // Even so, the first key after entering the player was reliably swallowed:
+    // when no leaf node holds focus, Flutter spends that key establishing focus
+    // and never delivers it. A hardware-level handler sees every key first, so
+    // it steps in exactly when nothing else owns the press — and stays out of
+    // the way when a button or shelf card does, so nothing is handled twice.
+    HardwareKeyboard.instance.addHandler(_handleUnfocusedKey);
+  }
+
+  bool _handleUnfocusedKey(KeyEvent event) {
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return false;
+    final focus = FocusManager.instance.primaryFocus;
+    final nothingOwnsIt = focus == null || focus is FocusScopeNode;
+    if (!nothingOwnsIt) return false;
+    if (event is KeyDownEvent) {
+      debugPrint('[player] key ${event.logicalKey.debugName} with no focus owner');
+    }
+    _handleKeyEvent(event);
+    _keyFocusNode.requestFocus();
+    return true;
   }
 
   /// A stream that never answers produces no error event at all, so without
@@ -150,6 +181,7 @@ class _WatchScreenState extends State<WatchScreen> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleUnfocusedKey);
     ThumbnailService.resume();
     _hideTimer?.cancel();
     _thumbnailTimer?.cancel();
@@ -193,7 +225,7 @@ class _WatchScreenState extends State<WatchScreen> {
   void _startHideTimer() {
     _hideTimer?.cancel();
     _hideTimer = Timer(_controlsTimeout, () {
-      if (!mounted || _shelfOpen || _error != null || !_playing) return;
+      if (!mounted || _shelfOpen || _error != null || !_playing || !_wantPlaying) return;
       setState(() => _controlsVisible = false);
     });
   }
@@ -236,7 +268,12 @@ class _WatchScreenState extends State<WatchScreen> {
   }
 
   void _togglePlayPause() {
-    _player.playOrPause();
+    _wantPlaying = !_wantPlaying;
+    if (_wantPlaying) {
+      _player.play();
+    } else {
+      _player.pause();
+    }
     _revealControls(focusPlay: true);
   }
 
@@ -260,6 +297,7 @@ class _WatchScreenState extends State<WatchScreen> {
       _buffering = true;
       _controlsVisible = true;
       _hasVideo = false;
+      _wantPlaying = true;
     });
     _keyFocusNode.requestFocus();
     _player.open(Media(widget.channel.url));
@@ -390,7 +428,7 @@ class _WatchScreenState extends State<WatchScreen> {
                 child: _TopBar(
                   channel: widget.channel,
                   channelCount: widget.channels.length,
-                  playing: _playing,
+                  playing: _wantPlaying,
                   playFocusNode: _playButtonFocus,
                   zoomed: _fit == BoxFit.cover,
                   shelfOpen: _shelfOpen,
@@ -590,7 +628,12 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+      padding: const EdgeInsets.fromLTRB(
+        AppTheme.safeHorizontal,
+        AppTheme.safeVertical,
+        AppTheme.safeHorizontal,
+        16,
+      ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,

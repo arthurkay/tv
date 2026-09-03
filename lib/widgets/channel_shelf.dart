@@ -68,7 +68,7 @@ class _ChannelShelfState extends State<ChannelShelf> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 210,
+      height: 210 + AppTheme.safeVertical,
       decoration: const BoxDecoration(
         color: AppTheme.surface,
         border: Border(
@@ -107,7 +107,8 @@ class _ChannelShelfState extends State<ChannelShelf> {
             child: ListView.separated(
               controller: _scrollController,
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: _horizontalPadding),
+              padding: const EdgeInsets.fromLTRB(
+                  _horizontalPadding, 0, _horizontalPadding, AppTheme.safeVertical),
               itemCount: widget.channels.length,
               separatorBuilder: (context, index) => const SizedBox(width: _gap),
               itemBuilder: (context, index) {

@@ -18,6 +18,7 @@ class MainActivity : FlutterActivity() {
 
     private companion object {
         const val CHANNEL = "vieo/voice"
+        const val DEVICE_CHANNEL = "vieo/device"
         const val VOICE_REQUEST = 4001
     }
 
@@ -31,6 +32,16 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
 
         launchQuery = queryFrom(intent)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isTelevision" -> result.success(
+                        packageManager.hasSystemFeature("android.software.leanback")
+                    )
+                    else -> result.notImplemented()
+                }
+            }
 
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).apply {
             setMethodCallHandler { call, result ->

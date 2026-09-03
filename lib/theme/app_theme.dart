@@ -50,10 +50,11 @@ class AppTheme {
     dividerColor: _border,
   );
 
-  /// TV panels overscan the edges. Android TV's guidance is a 5% safe area,
-  /// which is 48 x 27 logical pixels at 1080p.
-  static const safeHorizontal = 48.0;
-  static const safeVertical = 27.0;
+  /// TV panels overscan the edges. Android TV's guidance is 48 x 27 at 1080p,
+  /// but real sets crop more than the guidance assumes, and a first test on a
+  /// Google TV still clipped at those values. These sit a little inside.
+  static const safeHorizontal = 64.0;
+  static const safeVertical = 36.0;
 
   static const surface = _surface;
   static const surfaceHover = _surfaceHover;
