@@ -27,10 +27,13 @@ there is usually nothing to build:
 Direct link, if your downloader wants a URL rather than a page:
 
 ```
-https://github.com/arthurkay/tv/releases/latest/download/vieo-tv-arm64-v8a.apk
+https://github.com/arthurkay/tv/releases/latest/download/vieo-tv-armeabi-v7a.apk
 ```
 
-Older or budget hardware needs `vieo-tv-armeabi-v7a.apk` from the same release.
+That is the 32-bit build, deliberately: it installs on every ARM Android TV,
+64-bit included. Many Google TV devices (the Chromecast with Google TV among them)
+run a 32-bit system and refuse a 64-bit APK with "this app is not compatible with
+your TV". The `arm64-v8a` build on the same release is for boxes you know are 64-bit.
 
 The rest of this document is the developer path: building locally and installing
 over adb, which is what you want while changing the app.
@@ -51,11 +54,13 @@ flutter build apk --release --split-per-abi
 
 Then pick the one your device needs:
 
-- `arm64-v8a` (29 MB) — Chromecast with Google TV, NVIDIA Shield, essentially every TV or box from 2019 on.
-- `armeabi-v7a` (26 MB) — older or budget sticks.
+- `armeabi-v7a` (26 MB) — installs on every ARM device, 32- or 64-bit. **Use this unless you know better.**
+  Chromecast with Google TV and many Google TV sets are 32-bit and reject the arm64 build.
+- `arm64-v8a` (29 MB) — 64-bit boxes only: NVIDIA Shield, most recent Sony and high-end sets.
 - `x86_64` (33 MB) — emulators only.
 
-Unsure? `adb shell getprop ro.product.cpu.abi` tells you.
+Unsure? `adb shell getprop ro.product.cpu.abi` tells you. `armeabi-v7a` means 32-bit;
+a 64-bit device reports `arm64-v8a` but still runs the 32-bit build fine.
 
 > **Release builds are still signed with the debug keystore** (the Flutter template TODO in
 > `android/app/build.gradle.kts`). That installs fine on your own devices, but it is not
