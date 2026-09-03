@@ -168,7 +168,16 @@ class ThumbnailService {
   /// it plays: the viewer's stream should have the bandwidth, and mpv routes
   /// ffmpeg's process-global error log to every player, so a capture failing in
   /// the background can otherwise surface as an error on what is playing.
-  static void suspend() => _suspended = true;
+  static void suspend() {
+    _suspended = true;
+    // A capture already decoding would keep the TV's single hardware decoder
+    // busy for up to 30s of the viewer's stream: stop it now. The capture loop
+    // notices and re-queues the channel without counting it as a failure.
+    unawaited(
+      _capturePlayer?.stop().timeout(const Duration(seconds: 5), onTimeout: () {}) ??
+          Future<void>.value(),
+    );
+  }
 
   static void resume() {
     _suspended = false;
@@ -204,6 +213,11 @@ class ThumbnailService {
           entry.recordFailure();
         }
       }).catchError((Object error) {
+        if (error is _CaptureYielded) {
+          // Playback took the decoder; try again once it is free.
+          _pending.add(channel);
+          return;
+        }
         entry.recordFailure();
         debugPrint('[thumbnail] ${channel.name}: $error');
       }).whenComplete(() {
@@ -252,6 +266,7 @@ class ThumbnailService {
 
       final deadline = DateTime.now().add(_captureTimeout);
       while ((player.state.height ?? 0) <= 0) {
+        if (_suspended) throw const _CaptureYielded();
         if (failure != null) {
           debugPrint('[thumbnail] ${channel.name}: $failure');
           return null;
@@ -360,6 +375,11 @@ class ThumbnailService {
       entry.hydrated = false;
     }
   }
+}
+
+/// Thrown inside a capture when playback starts and needs the decoder.
+class _CaptureYielded implements Exception {
+  const _CaptureYielded();
 }
 
 /// Payload for the isolate that re-encodes a scaled frame.

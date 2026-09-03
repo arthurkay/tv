@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -38,6 +39,10 @@ class _WatchScreenState extends State<WatchScreen> {
   /// leaks and re-steals focus from the shelf on every rebuild.
   final FocusNode _keyFocusNode = FocusNode(debugLabel: 'WatchScreenKeys');
 
+  /// Where D-pad focus lands when the controls are summoned with a key, so the
+  /// viewer always has a visible starting point to navigate from.
+  final FocusNode _playButtonFocus = FocusNode(debugLabel: 'PlayPause');
+
   final List<StreamSubscription<Object?>> _subscriptions = [];
   Timer? _hideTimer;
   Timer? _thumbnailTimer;
@@ -65,14 +70,38 @@ class _WatchScreenState extends State<WatchScreen> {
     ThumbnailService.suspend();
 
     _player = Player();
-    _controller = VideoController(_player);
+    // On Android the default (vo=gpu, hwdec=auto-safe) becomes mediacodec-copy:
+    // every decoded frame is copied to CPU memory and re-uploaded, which
+    // stutters on TV-class chips. mediacodec_embed renders straight into the
+    // surface. The trade-off is that mpv can no longer screenshot this player,
+    // so the free frame grab below becomes best-effort (it already tolerates a
+    // null result).
+    _controller = VideoController(
+      _player,
+      configuration: defaultTargetPlatform == TargetPlatform.android
+          ? const VideoControllerConfiguration(
+              vo: 'mediacodec_embed',
+              hwdec: 'mediacodec',
+            )
+          : const VideoControllerConfiguration(),
+    );
 
     _subscriptions.addAll([
       _player.stream.buffering.listen((buffering) {
         if (mounted) setState(() => _buffering = buffering);
       }),
       _player.stream.playing.listen((playing) {
-        if (mounted) setState(() => _playing = playing);
+        if (!mounted) return;
+        setState(() {
+          _playing = playing;
+          // A paused picture with no controls is a dead end on a TV.
+          if (!playing) _controlsVisible = true;
+        });
+        if (playing) {
+          _startHideTimer();
+        } else {
+          _hideTimer?.cancel();
+        }
       }),
       // `playing` goes true while the stream is still buffering, so the frame
       // grab waits for video dimensions — the first point a frame exists.
@@ -129,6 +158,7 @@ class _WatchScreenState extends State<WatchScreen> {
       subscription.cancel();
     }
     _keyFocusNode.dispose();
+    _playButtonFocus.dispose();
     _player.dispose();
     WakelockPlus.disable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -163,14 +193,22 @@ class _WatchScreenState extends State<WatchScreen> {
   void _startHideTimer() {
     _hideTimer?.cancel();
     _hideTimer = Timer(_controlsTimeout, () {
-      if (!mounted || _shelfOpen || _error != null) return;
+      if (!mounted || _shelfOpen || _error != null || !_playing) return;
       setState(() => _controlsVisible = false);
     });
   }
 
-  void _revealControls() {
+  /// [focusPlay] hands D-pad focus to the play/pause button once the bar has
+  /// been built, so the next arrow press moves between visible controls rather
+  /// than into nothing.
+  void _revealControls({bool focusPlay = false}) {
     if (!_controlsVisible) setState(() => _controlsVisible = true);
     _startHideTimer();
+    if (focusPlay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _controlsVisible) _playButtonFocus.requestFocus();
+      });
+    }
   }
 
   void _toggleControls() {
@@ -199,7 +237,7 @@ class _WatchScreenState extends State<WatchScreen> {
 
   void _togglePlayPause() {
     _player.playOrPause();
-    _revealControls();
+    _revealControls(focusPlay: true);
   }
 
   /// Wraps around, so channel-up off the end of the list returns to the start.
@@ -254,7 +292,12 @@ class _WatchScreenState extends State<WatchScreen> {
       return;
     }
 
-    if (key == LogicalKeyboardKey.space ||
+    // OK reaches here only when no control has focus (a focused button
+    // handles it itself), so it is the remote's play/pause. Many Google TV
+    // remotes have no dedicated media keys at all.
+    if (key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.space ||
         key == LogicalKeyboardKey.mediaPlayPause ||
         key == LogicalKeyboardKey.mediaPlay ||
         key == LogicalKeyboardKey.mediaPause) {
@@ -292,7 +335,7 @@ class _WatchScreenState extends State<WatchScreen> {
         key == LogicalKeyboardKey.arrowRight ||
         key == LogicalKeyboardKey.arrowUp ||
         key == LogicalKeyboardKey.arrowDown) {
-      _revealControls();
+      _revealControls(focusPlay: !_controlsVisible);
     }
   }
 
@@ -348,6 +391,7 @@ class _WatchScreenState extends State<WatchScreen> {
                   channel: widget.channel,
                   channelCount: widget.channels.length,
                   playing: _playing,
+                  playFocusNode: _playButtonFocus,
                   zoomed: _fit == BoxFit.cover,
                   shelfOpen: _shelfOpen,
                   onBack: widget.onBack,
@@ -522,6 +566,7 @@ class _TopBar extends StatelessWidget {
   final Channel channel;
   final int channelCount;
   final bool playing;
+  final FocusNode playFocusNode;
   final bool zoomed;
   final bool shelfOpen;
   final VoidCallback onBack;
@@ -533,6 +578,7 @@ class _TopBar extends StatelessWidget {
     required this.channel,
     required this.channelCount,
     required this.playing,
+    required this.playFocusNode,
     required this.zoomed,
     required this.shelfOpen,
     required this.onBack,
@@ -626,6 +672,8 @@ class _TopBar extends StatelessWidget {
 
           _BarIconButton(
             icon: playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+            label: playing ? 'Pause' : 'Play',
+            focusNode: playFocusNode,
             onTap: onTogglePlay,
           ),
           const SizedBox(width: 8),
@@ -656,6 +704,7 @@ class _BarIconButton extends StatefulWidget {
   final VoidCallback onTap;
   final bool selected;
   final bool autofocus;
+  final FocusNode? focusNode;
 
   const _BarIconButton({
     required this.icon,
@@ -663,6 +712,7 @@ class _BarIconButton extends StatefulWidget {
     this.label,
     this.selected = false,
     this.autofocus = false,
+    this.focusNode,
   });
 
   @override
@@ -670,8 +720,10 @@ class _BarIconButton extends StatefulWidget {
 }
 
 class _BarIconButtonState extends State<_BarIconButton> {
-  final _focusNode = FocusNode();
+  FocusNode? _ownNode;
   bool _focused = false;
+
+  FocusNode get _focusNode => widget.focusNode ?? (_ownNode ??= FocusNode());
 
   @override
   void initState() {
@@ -682,7 +734,7 @@ class _BarIconButtonState extends State<_BarIconButton> {
   @override
   void dispose() {
     _focusNode.removeListener(_handleFocusChange);
-    _focusNode.dispose();
+    _ownNode?.dispose();
     super.dispose();
   }
 
@@ -693,12 +745,14 @@ class _BarIconButtonState extends State<_BarIconButton> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.selected
+    // Focus inverts the button outright: at ten feet a slightly lighter grey
+    // is invisible. A selected-but-unfocused toggle keeps a light border.
+    final bg = _focused
         ? AppTheme.textPrimary
-        : _focused
+        : widget.selected
             ? AppTheme.surfaceHover
             : AppTheme.surface;
-    final fg = widget.selected ? AppTheme.surface : AppTheme.textPrimary;
+    final fg = _focused ? AppTheme.surface : AppTheme.textPrimary;
 
     return Focus(
       focusNode: _focusNode,
@@ -721,7 +775,10 @@ class _BarIconButtonState extends State<_BarIconButton> {
             color: bg,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: _focused ? AppTheme.borderFocus : AppTheme.border,
+              color: _focused || widget.selected
+                  ? AppTheme.textPrimary
+                  : AppTheme.border,
+              width: _focused ? 2 : 1,
             ),
           ),
           child: Row(
